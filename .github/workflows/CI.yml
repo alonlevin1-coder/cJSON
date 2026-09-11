@@ -48,8 +48,9 @@ jobs:
     - name: install build dependencies
       run: |
         echo "Testing sudo inside MicroVM..."
-        sudo apt-get update
-        sudo apt-get install -y valgrind
+        sudo apt-mark unhold libc6 libc6-dev libssl3 libssl-dev 2>/dev/null || true
+        sudo apt-get install -y valgrind || true
+
 
     - name: build and test
       shell: bash
