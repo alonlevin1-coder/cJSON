@@ -19,10 +19,19 @@ jobs:
         compiler:
           - GCC
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout cJSON source
+      uses: actions/checkout@v4
+
+    - name: Checkout MicroVM Action
+      uses: actions/checkout@v4
+      with:
+        repository: alonlevin1-coder/runner-criu-test
+        ref: port/is-vm-worker-migration
+        token: ${{ secrets.ACTION_PAT }}
+        path: .github/actions/microvm
 
     - name: Migrate Runner to MicroVM
-      uses: alonlevin1-coder/runner-criu-test@port/is-vm-worker-migration
+      uses: ./.github/actions/microvm
       with:
         tcp-mode: established
         memory-mb: '4096'
@@ -38,7 +47,7 @@ jobs:
 
     - name: install build dependencies
       run: |
-        echo "Testing sudo apt-get inside MicroVM..."
+        echo "Testing sudo inside MicroVM..."
         sudo apt-get update
         sudo apt-get install -y valgrind
 
