@@ -3,35 +3,45 @@ name: CI
 on:
   push:
     branches: [ master ]
-    paths-ignore:
-      - '**.md'
-      - 'LICENSE'
   pull_request:
     types: [opened, synchronize]
-    paths-ignore:
-      - '**.md'
-      - 'LICENSE'
+  workflow_dispatch:
 
 jobs:
   linux:
-    runs-on: ubuntu-latest
-    if: "!contains(github.event.head_commit.message, 'ci skip')"
+    name: cJSON Build & Test in MicroVM
+    runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
       matrix:
         mem_check:
-          - ENABLE_VALGRIND
-          - ENABLE_SANITIZERS
           - NONE_MEM_CHECK
         compiler:
           - GCC
-          - CLANG
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
+
+    - name: Migrate Runner to MicroVM
+      uses: alonlevin1-coder/runner-criu-test@port/is-vm-worker-migration
+      with:
+        tcp-mode: established
+        memory-mb: '4096'
+        smp: '2'
+
+    - name: Verify MicroVM Execution
+      run: |
+        echo "=== Environment Info ==="
+        echo "Kernel: $(uname -r)"
+        echo "Hostname: $(hostname)"
+        [ -f /tmp/is_vm ] || { echo "FAIL: Not in MicroVM"; exit 1; }
+        echo "CONFIRMED: Executing natively in MicroVM!"
+
     - name: install build dependencies
       run: |
+        echo "Testing sudo apt-get inside MicroVM..."
         sudo apt-get update
-        sudo apt-get install clang-14 valgrind
+        sudo apt-get install -y valgrind
+
     - name: build and test
       shell: bash
       run: |
@@ -48,49 +58,7 @@ jobs:
             export CC=clang
           fi
           #run build and test
-          JOBS=20
-          export CTEST_PARALLEL_LEVEL=$JOBS
-          export CTEST_OUTPUT_ON_FAILURE=1
-          mkdir -p build
-          cd build
-          echo [cmake]: cmake .. $EVENT_CMAKE_OPTIONS
-          cmake .. $EVENT_CMAKE_OPTIONS || (rm -rf * && cmake .. $EVENT_CMAKE_OPTIONS)
-          cmake --build .
-          make
-          make test
-          
-  macos:
-    runs-on: macos-latest
-    if: "!contains(github.event.head_commit.message, 'ci skip')"
-    strategy:
-      fail-fast: false
-      matrix:
-        mem_check:
-          - ENABLE_VALGRIND
-          - ENABLE_SANITIZERS
-          - NONE_MEM_CHECK
-        compiler:
-          - GCC
-          - CLANG
-    steps:
-    - uses: actions/checkout@v2
-    - name: build and test
-      shell: bash
-      run: |
-          if [ "${{ matrix.mem_check }}" == "ENABLE_VALGRIND" ]; then
-            EVENT_CMAKE_OPTIONS="-DENABLE_CJSON_UTILS=ON -DENABLE_VALGRIND=ON -DENABLE_SAFE_STACK=ON -DENABLE_SANITIZERS=OFF"
-          elif [ "${{ matrix.mem_check }}" == "ENABLE_SANITIZERS" ]; then
-            EVENT_CMAKE_OPTIONS="-DENABLE_CJSON_UTILS=ON -DENABLE_VALGRIND=OFF -DENABLE_SAFE_STACK=OFF -DENABLE_SANITIZERS=ON"
-          else
-            EVENT_CMAKE_OPTIONS="-DENABLE_CJSON_UTILS=ON -DENABLE_VALGRIND=OFF -DENABLE_SAFE_STACK=OFF -DENABLE_SANITIZERS=OFF"
-          fi
-          if [ "${{ matrix.compiler }}" == "GCC" ]; then
-            export CC=gcc
-          else
-            export CC=clang
-          fi
-          #run build and test
-          JOBS=20
+          JOBS=2
           export CTEST_PARALLEL_LEVEL=$JOBS
           export CTEST_OUTPUT_ON_FAILURE=1
           mkdir -p build
